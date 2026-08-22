@@ -157,6 +157,16 @@ def test_loop_hard_cap():
     assert state["iters"]["review"] == 3  # max_iterations 硬止损，不会跑飞
 
 
+def test_node_guard_injected():
+    """每个 agent 节点的 system prompt 必须带输出约束——防模型反问用户导致链路断掉。"""
+    wf = load_workflow(LINEAR)
+    llm = FakeLLM()
+    run(wf, llm, {"topic": "x"})
+    for system, _user in llm.calls:
+        assert "不要向用户提问" in system
+        assert "只输出成品本身" in system
+
+
 def test_validation_errors():
     import pytest
 

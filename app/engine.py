@@ -27,11 +27,27 @@ class WfState(TypedDict):
     iters: Annotated[dict[str, int], _merge]  # loop 步的已执行次数
 
 
+# 工作流节点的通用约束。存在的理由（2026-08-22 实测）：
+# 通用 chat 模型默认是"助手人格"，会寒暄、复盘自己做了什么、并在信息不足时反问用户。
+# 但在工作流里产出是被下游步骤消费的，没有人会回答它的提问——一句反问就让整条链断掉。
+# （上游 agency-orchestrator 的 YAML 里逐条写这段守则；引擎层统一注入更可靠。）
+_NODE_GUARD = (
+    "\n\n严格输出约束："
+    "① 只输出成品本身，不要开场白、寒暄、或「我做了什么」的说明；"
+    "② 绝对不要向用户提问或请其确认——你的输出由下游程序消费，没有人会回答你；"
+    "③ 信息不足时按最合理假设直接产出，并在结果内用一行标注该假设；"
+    "④ 不要建议后续动作或说「需要我继续吗」。"
+)
+
+
 def _make_agent_node(step: StepDef, llm: LLM):
     def node(state: WfState) -> dict[str, Any]:
         task = render(step.task, state["vars"])
         # v0.1 角色系统降级为 system prompt 存根；完整人设加载见 ARCHITECTURE.md
-        system = f"你是「{step.name or step.role}」（{step.role}），按任务要求交付专业结果。"
+        system = (
+            f"你是「{step.name or step.role}」（{step.role}），按任务要求交付专业结果。"
+            + _NODE_GUARD
+        )
         content = llm.chat(system, task)
         out = {step.output: content} if step.output else {}
         return {"vars": out, "iters": {step.id: state["iters"].get(step.id, 0) + 1}}

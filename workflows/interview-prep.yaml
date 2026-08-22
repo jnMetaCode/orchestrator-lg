@@ -1,0 +1,60 @@
+name: "面试准备流水线"
+description: "输入岗位方向 → 预测高频追问 → 生成回答骨架 → 人工审批 → 输出可背诵的应答卡"
+
+inputs:
+  - name: role
+    description: "目标岗位"
+    required: true
+  - name: project
+    description: "要讲的项目一句话简介"
+    required: true
+
+steps:
+  - id: predict
+    role: "engineering/interviewer"
+    name: "面试官视角"
+    task: |
+      你是{{role}}岗位的技术面试官。候选人的项目是：{{project}}
+
+      列出你最想追问的 3 个问题（挑最能区分"真做过"和"看过教程"的）。
+      每题一行，格式：问题 → 你想从答案里听到什么。不要客套话。
+    output: questions
+
+  - id: skeleton
+    role: "engineering/coach"
+    name: "答题教练"
+    task: |
+      针对下面这些面试追问，为候选人写回答骨架。
+
+      追问清单：
+      {{questions}}
+
+      每题给：① 30 秒版本的答题结构（3 个要点）② 必须报出的数字或案例类型。
+      直接给骨架，不要解释你在做什么。
+    output: draft
+    depends_on: [predict]
+
+  - id: gate
+    type: approval
+    name: "人工审批"
+    prompt: |
+      面试官预测的追问 + 回答骨架已生成：
+
+      {{draft}}
+
+      请审批（同意 / 提出修改意见）：
+    output: decision
+    depends_on: [skeleton]
+
+  - id: finalize
+    role: "engineering/coach"
+    name: "定稿"
+    task: |
+      根据审批意见定稿应答卡。
+
+      骨架：{{draft}}
+      审批意见：{{decision}}
+
+      输出最终的应答卡（markdown，每题不超过 5 行，可直接背诵）。
+    output: card
+    depends_on: [gate]

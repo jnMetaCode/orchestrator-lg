@@ -44,3 +44,38 @@ class DeepSeekLLM:
         )
         r.raise_for_status()
         return r.json()["choices"][0]["message"]["content"] or ""
+
+
+class ClaudeCliLlm:
+    """    本地 claude CLI 作为纯 LLM 后端。
+
+    ⚠️ 关键隔离（2026-08-22 实测发现的真 bug）：claude CLI 不是纯 LLM，
+    它是带工具和项目上下文的 agent——在项目目录里跑会读到 CLAUDE.md 和源码，
+    导致它"知道"自己在哪个仓库里，污染回答（实测：agent 会反问"要我从项目里提取数据吗"）。
+    三重隔离：① cwd 指向空沙箱目录 ② --allowedTools "" 禁用全部工具
+    ③ prompt 走 stdin（变参 flag 会吞掉位置参数）。
+
+    引擎是同步的，用 subprocess.run 阻塞调用即可
+    （LangGraph 会把同一超步里的独立节点放线程池并行执行）。
+    """
+
+    def __init__(self, model: str = "haiku", timeout: int = 180) -> None:
+        self._model = model
+        self._timeout = timeout
+
+    def chat(self, system: str, user: str) -> str:
+        import subprocess
+        import tempfile
+        from pathlib import Path
+
+        sandbox = Path(tempfile.gettempdir()) / "claude-llm-sandbox"
+        sandbox.mkdir(exist_ok=True)
+        r = subprocess.run(
+            ["claude", "-p", "--model", self._model,
+             "--allowedTools", "", "--append-system-prompt", system],
+            input=user, capture_output=True, text=True,
+            timeout=self._timeout, cwd=sandbox,
+        )
+        if r.returncode != 0:
+            raise RuntimeError(f"claude CLI 失败: {r.stderr[:200]}")
+        return r.stdout.strip()
