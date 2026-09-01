@@ -157,6 +157,40 @@ def test_loop_hard_cap():
     assert state["iters"]["review"] == 3  # max_iterations 硬止损，不会跑飞
 
 
+def test_resume_across_process_restart_with_sqlite(tmp_path):
+    """跨进程恢复：进程 A 跑到审批点后死掉，进程 B 仅凭 sqlite 文件续跑。
+
+    "死掉"的模拟：丢弃 A 的 graph/llm/连接全部内存对象，B 用全新对象重建图。
+    这是 MemorySaver 版讲不出的下半句——状态真的落了盘。
+    """
+    import sqlite3
+
+    from langgraph.checkpoint.sqlite import SqliteSaver
+
+    from app.engine import resume
+
+    wf = load_workflow(APPROVAL)
+    db = tmp_path / "ckpt.db"
+
+    # 进程 A：跑到审批中断，然后"崩溃"
+    conn_a = sqlite3.connect(db, check_same_thread=False)  # LangGraph 节点跑在线程池里
+    _, state = run(wf, FakeLLM({"出方案": "方案X"}), {}, thread_id="t-restart",
+                   checkpointer=SqliteSaver(conn_a))
+    assert "__interrupt__" in state
+    assert "result" not in state["vars"]
+    conn_a.close()
+    del state
+
+    # 进程 B：全新 LLM、全新图，只有 sqlite 文件是共享的
+    conn_b = sqlite3.connect(db, check_same_thread=False)
+    _, final = resume(wf, FakeLLM(), "同意，按 B 案执行", thread_id="t-restart",
+                      checkpointer=SqliteSaver(conn_b))
+    conn_b.close()
+    assert final["vars"]["decision"] == "同意，按 B 案执行"
+    assert "result" in final["vars"]  # 审批之后的步骤真的接着跑完了
+    assert final["vars"]["plan_doc"] == "方案X"  # 审批之前的产出从 checkpoint 里回来了
+
+
 def test_node_guard_injected():
     """每个 agent 节点的 system prompt 必须带输出约束——防模型反问用户导致链路断掉。"""
     wf = load_workflow(LINEAR)

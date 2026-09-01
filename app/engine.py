@@ -5,14 +5,15 @@
   output 变量池          -> State.vars（dict 合并 reducer，天然支持并行写不同 key）
   type: approval        -> interrupt()（HITL：暂停等人，靠 checkpoint 可跨进程恢复）
   loop.max_iterations   -> 条件边回跳 + 迭代计数 + recursion_limit 双保险
-  断点续跑               -> checkpointer（MemorySaver / 生产换 SqliteSaver·PostgresSaver）
+  断点续跑               -> checkpointer（默认 MemorySaver；传 SqliteSaver 即得跨进程
+                           恢复——见 resume() 与 tests 里的"杀进程重启"用例）
 """
 
 from typing import Annotated, Any, TypedDict
 
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, START, StateGraph
-from langgraph.types import interrupt
+from langgraph.types import Command, interrupt
 
 from .llm import LLM
 from .workflow import StepDef, Workflow, eval_condition, render
@@ -124,4 +125,19 @@ def run(wf: Workflow, llm: LLM, inputs: dict[str, str], *, thread_id: str = "mai
     graph = build_graph(wf, llm, checkpointer)
     config = {"configurable": {"thread_id": thread_id}, "recursion_limit": recursion_limit}
     state = graph.invoke({"vars": variables, "iters": {}}, config)
+    return graph, state
+
+
+def resume(wf: Workflow, llm: LLM, decision: str, *, thread_id: str = "main",
+           recursion_limit: int = 50, checkpointer=None):
+    """从 checkpoint 恢复被 approval 打断的工作流——包括进程重启之后。
+
+    跨进程恢复的分工：图拓扑不入库，从 YAML 重建（build_graph 是确定性的）；
+    执行状态（vars/iters/停在哪个节点）由 checkpointer 提供。
+    同进程续跑用原 graph.invoke(Command(...)) 即可；这个入口给"进程死过一回"的场景，
+    此时必须传持久化的 checkpointer（如 SqliteSaver），MemorySaver 里什么都不剩。
+    """
+    graph = build_graph(wf, llm, checkpointer)
+    config = {"configurable": {"thread_id": thread_id}, "recursion_limit": recursion_limit}
+    state = graph.invoke(Command(resume=decision), config)
     return graph, state

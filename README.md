@@ -1,5 +1,7 @@
 # orchestrator-lg
 
+[![CI](https://github.com/jnMetaCode/orchestrator-lg/actions/workflows/ci.yml/badge.svg)](https://github.com/jnMetaCode/orchestrator-lg/actions/workflows/ci.yml)
+
 [agency-orchestrator](https://github.com/jnMetaCode/agency-orchestrator) 核心引擎的 **LangGraph 重写原型**：
 YAML 工作流 → StateGraph，带 checkpoint、人工审批中断（HITL）、循环硬止损。
 
@@ -8,7 +10,7 @@ YAML 工作流 → StateGraph，带 checkpoint、人工审批中断（HITL）、
 > 硬约束：**用户的 YAML 工作流一行不改**。
 
 ```bash
-uv sync && uv run pytest -q                    # 7 项全绿，零外部依赖（FakeLLM）
+uv sync && uv run pytest -q                    # 8 项全绿，零外部依赖（FakeLLM）
 uv run python scripts/run_demo.py              # 真机跑：4 步工作流 + 审批中断→checkpoint 恢复（本地 claude CLI，免 key）
 ```
 
@@ -31,7 +33,7 @@ uv run python scripts/run_demo.py              # 真机跑：4 步工作流 + �
 | | 做什么 | 关键实测 |
 |---|---|---|
 | [repo-rag](https://github.com/jnMetaCode/repo-rag) | 中文知识库 RAG：结构分块 + 两层拒答 + 引用溯源 | hit@1 95.8% · faithfulness 0.981 |
-| [orchestrator-lg](https://github.com/jnMetaCode/orchestrator-lg) | 自研 DAG 引擎迁到 LangGraph：checkpoint + 可持久化审批中断 | 7/7 测试 · YAML 零改动兼容 |
+| [orchestrator-lg](https://github.com/jnMetaCode/orchestrator-lg) | 自研 DAG 引擎迁到 LangGraph：checkpoint + 可持久化审批中断 | 8/8 测试 · YAML 零改动兼容 · 跨进程恢复 |
 | [llm-gateway](https://github.com/jnMetaCode/llm-gateway) | 多模型网关：SSE 取消链 + 三态熔断 + token 计费 | 10/10 测试 · Docker |
 
 共同的方法论：**先建评估集，再写优化**——每个技术决策都由实测数据推导，包括那些「该做但做了反而更差」的决策。

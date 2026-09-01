@@ -5,6 +5,7 @@ description = "agency-orchestrator 的 LangGraph 版核心引擎原型：YAML �
 requires-python = ">=3.11"
 dependencies = [
     "langgraph>=0.6",
+    "langgraph-checkpoint-sqlite>=2.0",
     "pydantic>=2.7",
     "pyyaml>=6.0",
     "httpx>=0.27",

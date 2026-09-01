@@ -21,7 +21,7 @@ YAML 字段名、`{{var}}` 模板语法、condition 的 `contains` 语法——*
 ## v0.1 刻意不做
 - `acceptance` 自动核验 + 返工（下一步：LangGraph 条件边天然表达"核验不过→回本步"）
 - `assert` 机械断言、`skills` 注入、image 节点、角色人设完整加载（现为 system prompt 存根）
-- SqliteSaver 持久化落盘（MemorySaver 先证明模型，换 saver 是一行事）
+- ~~SqliteSaver 持久化落盘~~（已兑现：`resume()` + 跨进程恢复测试与 demo——图拓扑从 YAML 重建，状态从 sqlite 回来，"换 saver 是一行事"验证为真）
 
 ## 为什么值得迁（一句话版）
 自研执行器 80% 的代码在解决 LangGraph 已经解决的问题（调度/状态/恢复），而剩下 20%（YAML 前端、角色库、connector 生态）才是这个项目真正的差异化——迁移让维护面积缩到差异化本身。
@@ -42,6 +42,6 @@ YAML 字段名、`{{var}}` 模板语法、condition 的 `contains` 语法——*
 实测修复后：模型改为在结果末尾标注"以下数值基于推演，如有真实数据可替换"，正是守则期望的行为。
 
 ## 验证
-`uv run pytest -q`：7 项全绿（FakeLLM，零外部依赖）——线性流变量传递 / 并行分支汇聚 / **审批中断→跨调用恢复** / 循环达标退出 / **max_iterations 硬止损** / YAML 校验 / 节点守则注入。
+`uv run pytest -q`：8 项全绿（FakeLLM，零外部依赖）——线性流变量传递 / 并行分支汇聚 / **审批中断→跨调用恢复** / **跨进程重启恢复（SqliteSaver）** / 循环达标退出 / **max_iterations 硬止损** / YAML 校验 / 节点守则注入。
 
-真机端到端：`uv run python scripts/run_demo.py`——4 步工作流（含审批节点）接本地 claude CLI 跑通，全程约 90 秒，演示中断→checkpoint 恢复→定稿。
+真机端到端：`uv run python scripts/run_demo.py`——4 步工作流（含审批节点）接本地 claude CLI 跑通，全程约 90 秒，演示中断→**杀进程（丢弃全部内存对象）→仅凭 sqlite 文件恢复**→定稿。
